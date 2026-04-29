@@ -21,7 +21,7 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
 
   const handleStart = async () => {
     try {
-      await startGame(room.id, room.players);
+      await startGame(room.id);
     } catch (err) {
       console.error(err);
       alert("Lỗi khi bắt đầu game");

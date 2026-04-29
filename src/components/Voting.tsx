@@ -21,7 +21,7 @@ export default function Voting({ room, currentPlayerId }: Props) {
     
     setIsSubmitting(true);
     try {
-      await submitVote(room.id, currentPlayerId, selectedId, room.players);
+      await submitVote(room.id, currentPlayerId, selectedId);
     } catch (err) {
       console.error(err);
       alert("Lỗi khi gửi phiếu bầu");

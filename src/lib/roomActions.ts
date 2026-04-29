@@ -1,6 +1,6 @@
 import { db } from "./firebase";
-import { collection, doc, setDoc, getDoc, updateDoc, arrayUnion } from "firebase/firestore";
-import { Player, Room, RoomStatus } from "@/types/game";
+import { doc, setDoc, runTransaction } from "firebase/firestore";
+import { Player, Room } from "@/types/game";
 import { assignRolesAndWords } from "./gameLogic";
 
 // Helper to generate a random 6-character room code
@@ -29,7 +29,7 @@ export async function createRoom(hostName: string, hostId: string): Promise<stri
     spyWord: "",
     civilianWord: "",
     createdAt: Date.now(),
-    cardRevealDuration: 5 // Default 5 seconds
+    cardRevealDuration: 5
   };
 
   await setDoc(roomRef, newRoom);
@@ -38,107 +38,122 @@ export async function createRoom(hostName: string, hostId: string): Promise<stri
 
 export async function joinRoom(roomId: string, playerName: string, playerId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
-  const roomSnap = await getDoc(roomRef);
-
-  if (!roomSnap.exists()) {
-    throw new Error("Phòng không tồn tại!");
-  }
-
-  const roomData = roomSnap.data() as Room;
   
-  if (roomData.status !== "WAITING") {
-    throw new Error("Phòng đã bắt đầu chơi!");
-  }
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) throw new Error("Phòng không tồn tại!");
+    
+    const roomData = roomSnap.data() as Room;
+    if (roomData.status !== "WAITING") throw new Error("Phòng đã bắt đầu chơi!");
+    
+    // Check if already joined
+    if (roomData.players.some(p => p.id === playerId)) return;
 
-  // Check if player already in room
-  if (roomData.players.some(p => p.id === playerId)) {
-    return; // Already joined
-  }
+    const newPlayer: Player = {
+      id: playerId,
+      name: playerName,
+      word: "",
+      isSpy: false,
+      vote: null,
+      isHost: false,
+      hasRevealed: false
+    };
 
-  const newPlayer: Player = {
-    id: playerId,
-    name: playerName,
-    word: "",
-    isSpy: false,
-    vote: null,
-    isHost: false,
-    hasRevealed: false
-  };
-
-  const updatedPlayers = [...roomData.players, newPlayer];
-
-  await updateDoc(roomRef, {
-    players: updatedPlayers
+    transaction.update(roomRef, {
+      players: [...roomData.players, newPlayer]
+    });
   });
 }
 
-export async function startGame(roomId: string, players: Player[]): Promise<void> {
+export async function startGame(roomId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
   
-  const { updatedPlayers, spyWord, civilianWord } = assignRolesAndWords(players);
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    
+    const roomData = roomSnap.data() as Room;
+    const { updatedPlayers, spyWord, civilianWord } = assignRolesAndWords(roomData.players);
 
-  await updateDoc(roomRef, {
-    status: "SHOW_CARD",
-    players: updatedPlayers,
-    spyWord,
-    civilianWord
+    transaction.update(roomRef, {
+      status: "SHOW_CARD",
+      players: updatedPlayers,
+      spyWord,
+      civilianWord
+    });
   });
 }
 
-export async function revealCard(roomId: string, playerId: string, players: Player[]): Promise<void> {
+export async function revealCard(roomId: string, playerId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
   
-  const updatedPlayers = players.map(p => 
-    p.id === playerId ? { ...p, hasRevealed: true } : p
-  );
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    
+    const roomData = roomSnap.data() as Room;
+    const updatedPlayers = roomData.players.map(p => 
+      p.id === playerId ? { ...p, hasRevealed: true } : p
+    );
 
-  await updateDoc(roomRef, {
-    players: updatedPlayers
+    transaction.update(roomRef, {
+      players: updatedPlayers
+    });
   });
 }
 
 export async function startVotingPhase(roomId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
-  await updateDoc(roomRef, {
-    status: "VOTING"
+  
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    transaction.update(roomRef, { status: "VOTING" });
   });
 }
 
-export async function submitVote(roomId: string, playerId: string, votedPlayerId: string, players: Player[]): Promise<void> {
+export async function submitVote(roomId: string, playerId: string, votedPlayerId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
   
-  const updatedPlayers = players.map(p => 
-    p.id === playerId ? { ...p, vote: votedPlayerId } : p
-  );
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    
+    const roomData = roomSnap.data() as Room;
+    const updatedPlayers = roomData.players.map(p => 
+      p.id === playerId ? { ...p, vote: votedPlayerId } : p
+    );
 
-  await updateDoc(roomRef, {
-    players: updatedPlayers
-  });
-
-  // Check if everyone has voted
-  const allVoted = updatedPlayers.every(p => p.vote !== null);
-  if (allVoted) {
-    await updateDoc(roomRef, {
-      status: "RESULT"
+    const allVoted = updatedPlayers.every(p => p.vote !== null);
+    
+    transaction.update(roomRef, {
+      players: updatedPlayers,
+      ...(allVoted ? { status: "RESULT" } : {})
     });
-  }
+  });
 }
 
-export async function playAgain(roomId: string, players: Player[]): Promise<void> {
+export async function playAgain(roomId: string): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
   
-  const resetPlayers = players.map(p => ({
-    ...p,
-    word: "",
-    isSpy: false,
-    vote: null,
-    hasRevealed: false
-  }));
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    
+    const roomData = roomSnap.data() as Room;
+    const resetPlayers = roomData.players.map(p => ({
+      ...p,
+      word: "",
+      isSpy: false,
+      vote: null,
+      hasRevealed: false
+    }));
 
-  await updateDoc(roomRef, {
-    status: "WAITING",
-    players: resetPlayers,
-    spyWord: "",
-    civilianWord: ""
+    transaction.update(roomRef, {
+      status: "WAITING",
+      players: resetPlayers,
+      spyWord: "",
+      civilianWord: ""
+    });
   });
 }

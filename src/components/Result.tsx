@@ -20,7 +20,7 @@ export default function Result({ room, isHost, currentPlayerId }: Props) {
 
   const handlePlayAgain = async () => {
     try {
-      await playAgain(room.id, room.players);
+      await playAgain(room.id);
     } catch (err) {
       console.error(err);
       alert("Lỗi khi tạo ván mới");

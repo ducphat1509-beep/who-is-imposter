@@ -16,7 +16,7 @@ export default function GameBoard({ room, currentPlayer }: Props) {
   const handleReveal = async () => {
     setShowWord(true);
     if (!currentPlayer.hasRevealed) {
-      await revealCard(room.id, currentPlayer.id, room.players);
+      await revealCard(room.id, currentPlayer.id);
     }
   };
 
