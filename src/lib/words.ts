@@ -29,6 +29,23 @@ export const WORD_PAIRS = [
   ["Máy tính", "Điện thoại"],
   ["Tai nghe", "Loa"],
   ["Bàn", "Ghế"],
+  ["Sơn Tùng M-TP", "Jack"],
+  ["Lẩu", "Nướng"],
+  ["Dưa hấu", "Bưởi"],
+  ["Đồng hồ", "Vòng tay"],
+  ["Vali", "Balo"],
+
+
+  ["Con Voi", "GIÁN ĐIỆP \n Gợi ý: Động vật có vòi"],
+  ["Hà Nội", "GIÁN ĐIỆP \n Gợi ý: Thủ đô"],
+  ["Youtube", "GIÁN ĐIỆP \n Gợi ý: Nền tảng xem video"],
+  ["Mì tôm", "GIÁN ĐIỆP \n Gợi ý: Đồ ăn nhanh"],
+  ["Học sinh", "GIÁN ĐIỆP \n Gợi ý: Một nghề nghiệp"],
+  ["Sữa tươi", "GIÁN ĐIỆP \n Gợi ý: Đồ uống bổ dưỡng"],
+  ["Rạp chiếu phim", "GIÁN ĐIỆP \n Gợi ý: Nơi xem phim"],
+  ["Thẻ ATM", "GIÁN ĐIỆP \n Gợi ý: Dùng để rút tiền"],
+  ["Hồ Chí Minh", "GIÁN ĐIỆP \n Gợi ý: Một vị lãnh tụ"],
+  ["Bóng chuyền", "GIÁN ĐIỆP \n Gợi ý: Một môn thể thao"],
 ];
 
 export function pickRandomWordPair(): { word1: string; word2: string } {
