@@ -4,7 +4,6 @@ import { db } from "@/lib/firebase";
 import { Room } from "@/types/game";
 
 export function useRoom(roomId: string | null) {
-  const [room, setRoom] = null as unknown as [Room | null, React.Dispatch<React.SetStateAction<Room | null>>]; // Will fix in a moment with proper type but let's write it cleaner
   const [roomState, setRoomState] = useState<Room | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
