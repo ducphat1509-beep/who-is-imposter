@@ -20,10 +20,6 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
   };
 
   const handleStart = async () => {
-    if (room.players.length < 3) {
-      alert("Cần ít nhất 3 người chơi để bắt đầu!");
-      return;
-    }
     try {
       await startGame(room.id, room.players);
     } catch (err) {
@@ -54,7 +50,7 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
             Người chơi
           </h3>
           <span className="bg-primary/20 text-primary px-3 py-1 rounded-full text-sm font-bold">
-            {room.players.length} / 12
+            {room.players.length}
           </span>
         </div>
 
@@ -90,10 +86,9 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
         {isHost ? (
           <button 
             onClick={handleStart}
-            disabled={room.players.length < 3}
             className="btn-primary w-full py-4 text-lg"
           >
-            {room.players.length < 3 ? "Đợi thêm người..." : "Bắt Đầu Game"}
+            Bắt Đầu Game
           </button>
         ) : (
           <div className="glass-card py-4 text-center border-primary/30 bg-primary/5">
