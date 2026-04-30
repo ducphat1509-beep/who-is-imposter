@@ -1,36 +1,68 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🕵️ Who is the Imposter?
 
-## Getting Started
+A simple web game inspired by "Who is the Imposter" party game.  
+Play with friends, guess the odd one out, and try not to get exposed.
 
-First, run the development server:
+🌐 Live Demo: https://who-is-imposter-ten.vercel.app/
 
+---
+
+## 🚀 Getting Started
+
+### 1. Clone the repository
 ```bash
+git clone https://github.com/your-username/your-repo.git
+cd your-repo
+
+### 2. Install dependencies
+npm install
+# or
+yarn install
+# or
+pnpm install
+
+### 3. Setup environment variables
+
+Create a .env.local file in the root directory and add:
+
+NEXT_PUBLIC_API_URL=
+FIREBASE_API_KEY=
+FIREBASE_AUTH_DOMAIN=
+
+### 4. Run the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+🧩 Features
+🎮 Multiplayer party game logic
+🤔 Random word assignment
+🕵️ Imposter detection gameplay
+⚡ Fast UI with Next.js
+🛠 Tech Stack
+Next.js
+React
+Vercel
+(Optional) Firebase for backend services
+📦 Deployment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The project is deployed on Vercel.
 
-## Learn More
+To deploy your own version:
 
-To learn more about Next.js, take a look at the following resources:
+Push your repo to GitHub
+Import into Vercel
+Add Environment Variables in Vercel dashboard
+Click Deploy
+📚 Learn More
+Next.js Docs: https://nextjs.org/docs
+Vercel: https://vercel.com
+⚠️ Notes
+Never expose your API keys
+Always use .env.local for secrets
+If something breaks, it's probably your env config (yes, really)
+👀 Quick Access
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+If you're too lazy to clone (understandable), just use the live version:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+👉 https://who-is-imposter-ten.vercel.app/
