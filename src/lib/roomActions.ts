@@ -157,3 +157,29 @@ export async function playAgain(roomId: string): Promise<void> {
     });
   });
 }
+
+export async function kickPlayer(roomId: string, playerIdToKick: string): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+  
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+    
+    const roomData = roomSnap.data() as Room;
+    const updatedPlayers = roomData.players.filter(p => p.id !== playerIdToKick);
+
+    const updateData: any = {
+      players: updatedPlayers
+    };
+
+    // If kicking during voting, check if it triggers the end of voting
+    if (roomData.status === "VOTING" && updatedPlayers.length > 0) {
+      const allVoted = updatedPlayers.every(p => p.vote !== null);
+      if (allVoted) {
+        updateData.status = "RESULT";
+      }
+    }
+
+    transaction.update(roomRef, updateData);
+  });
+}

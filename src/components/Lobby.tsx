@@ -1,6 +1,6 @@
 import { Room } from "@/types/game";
-import { startGame } from "@/lib/roomActions";
-import { Users, Crown, Copy, Check } from "lucide-react";
+import { startGame, kickPlayer } from "@/lib/roomActions";
+import { Users, Crown, Copy, Check, X } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
 
@@ -25,6 +25,16 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
     } catch (err) {
       console.error(err);
       alert("Lỗi khi bắt đầu game");
+    }
+  };
+
+  const handleKick = async (pid: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn đuổi ${name} khỏi phòng?`)) return;
+    try {
+      await kickPlayer(room.id, pid);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi đuổi người chơi");
     }
   };
 
@@ -76,7 +86,18 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
                   </span>
                 </div>
               </div>
-              {player.isHost && <Crown className="w-5 h-5 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]" />}
+              <div className="flex items-center gap-2">
+                {player.isHost && <Crown className="w-5 h-5 text-yellow-500 drop-shadow-[0_0_8px_rgba(234,179,8,0.5)]" />}
+                {isHost && !player.isHost && (
+                  <button
+                    onClick={() => handleKick(player.id, player.name)}
+                    className="p-1.5 hover:bg-danger/20 text-slate-400 hover:text-danger rounded-lg transition-colors"
+                    title="Đuổi khỏi phòng"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

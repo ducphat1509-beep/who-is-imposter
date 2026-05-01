@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Room, Player } from "@/types/game";
-import { revealCard, startVotingPhase } from "@/lib/roomActions";
+import { revealCard, startVotingPhase, kickPlayer } from "@/lib/roomActions";
 import Timer from "./Timer";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, X, Users } from "lucide-react";
 import clsx from "clsx";
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
 
 export default function GameBoard({ room, currentPlayer }: Props) {
   const [showWord, setShowWord] = useState(false);
+  const [isKicking, setIsKicking] = useState(false);
+  const [showPlayers, setShowPlayers] = useState(false);
 
   const handleReveal = async () => {
     setShowWord(true);
@@ -24,6 +26,19 @@ export default function GameBoard({ room, currentPlayer }: Props) {
     // Only host transitions to next phase to prevent race conditions
     if (currentPlayer.isHost) {
       await startVotingPhase(room.id);
+    }
+  };
+
+  const handleKick = async (pid: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn đuổi ${name} khỏi phòng?`)) return;
+    setIsKicking(true);
+    try {
+      await kickPlayer(room.id, pid);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi đuổi người chơi");
+    } finally {
+      setIsKicking(false);
     }
   };
 
@@ -85,8 +100,57 @@ export default function GameBoard({ room, currentPlayer }: Props) {
       )}
       
       {!allRevealed && (
-        <div className="mt-8 text-sm text-slate-400 animate-pulse">
-          Đang chờ những người khác xem bài...
+        <div className="mt-8 flex flex-col items-center gap-4">
+          <div className="text-sm text-slate-400 animate-pulse">
+            Đang chờ những người khác xem bài...
+          </div>
+          
+          {currentPlayer.isHost && (
+            <button 
+              onClick={() => setShowPlayers(!showPlayers)}
+              className="flex items-center gap-2 text-xs text-primary bg-primary/10 px-3 py-2 rounded-full hover:bg-primary/20 transition-colors"
+            >
+              <Users className="w-3 h-3" />
+              {showPlayers ? "Ẩn danh sách" : "Xem ai chưa lật"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {showPlayers && currentPlayer.isHost && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPlayers(false)} />
+          <div className="glass-card w-full max-w-sm relative z-10 space-y-4 animate-in fade-in slide-in-from-bottom-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-bold text-lg">Quản lý người chơi</h3>
+              <button onClick={() => setShowPlayers(false)} className="p-1 hover:bg-white/10 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+              {room.players.map(p => (
+                <div key={p.id} className="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-3">
+                    <div className={clsx(
+                      "w-2 h-2 rounded-full",
+                      p.hasRevealed ? "bg-success shadow-[0_0_5px_rgba(16,185,129,0.5)]" : "bg-slate-600"
+                    )} />
+                    <span className="text-sm font-medium">{p.name}</span>
+                    {p.id === currentPlayer.id && <span className="text-[10px] text-primary">Bạn</span>}
+                  </div>
+                  {p.id !== currentPlayer.id && (
+                    <button
+                      onClick={() => handleKick(p.id, p.name)}
+                      disabled={isKicking}
+                      className="p-1.5 hover:bg-danger/20 text-slate-400 hover:text-danger rounded-lg transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

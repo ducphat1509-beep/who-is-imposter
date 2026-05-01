@@ -1,7 +1,8 @@
 import { Room } from "@/types/game";
 import { countVotes } from "@/lib/gameLogic";
-import { playAgain } from "@/lib/roomActions";
-import { Ghost, ShieldCheck, Skull, RotateCcw } from "lucide-react";
+import { playAgain, kickPlayer } from "@/lib/roomActions";
+import { Ghost, ShieldCheck, Skull, RotateCcw, X } from "lucide-react";
+import { useState } from "react";
 import clsx from "clsx";
 
 interface Props {
@@ -11,19 +12,33 @@ interface Props {
 }
 
 export default function Result({ room, isHost, currentPlayerId }: Props) {
+  const [isKicking, setIsKicking] = useState(false);
+
   const { mostVotedId, isTie } = countVotes(room.players);
   
   const eliminatedPlayer = room.players.find(p => p.id === mostVotedId);
   const isSpyCaught = eliminatedPlayer?.isSpy || false;
   const spyPlayer = room.players.find(p => p.isSpy);
   const isSpyWon = isTie || !isSpyCaught;
-
   const handlePlayAgain = async () => {
     try {
       await playAgain(room.id);
     } catch (err) {
       console.error(err);
       alert("Lỗi khi tạo ván mới");
+    }
+  };
+
+  const handleKick = async (pid: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn đuổi ${name} khỏi phòng?`)) return;
+    setIsKicking(true);
+    try {
+      await kickPlayer(room.id, pid);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi đuổi người chơi");
+    } finally {
+      setIsKicking(false);
     }
   };
 
@@ -91,8 +106,20 @@ export default function Result({ room, isHost, currentPlayerId }: Props) {
                   </span>
                   {p.isSpy && <Ghost className="w-4 h-4 text-danger" />}
                 </div>
-                <div className="text-slate-500 text-xs">
-                  {p.vote ? `Vote: ${room.players.find(vp => vp.id === p.vote)?.name}` : "Không vote"}
+                <div className="flex items-center gap-2">
+                  <div className="text-slate-500 text-xs mr-2">
+                    {p.vote ? `Vote: ${room.players.find(vp => vp.id === p.vote)?.name}` : "Không vote"}
+                  </div>
+                  {isHost && p.id !== currentPlayerId && (
+                    <button
+                      onClick={() => handleKick(p.id, p.name)}
+                      disabled={isKicking}
+                      className="p-1 hover:bg-danger/20 text-slate-500 hover:text-danger rounded transition-colors"
+                      title="Đuổi khỏi phòng"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Room } from "@/types/game";
-import { submitVote } from "@/lib/roomActions";
+import { submitVote, kickPlayer } from "@/lib/roomActions";
 import clsx from "clsx";
-import { Check, ShieldAlert } from "lucide-react";
+import { Check, ShieldAlert, X } from "lucide-react";
 
 interface Props {
   room: Room;
@@ -12,10 +12,11 @@ interface Props {
 export default function Voting({ room, currentPlayerId }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isKicking, setIsKicking] = useState(false);
 
   const currentPlayer = room.players.find(p => p.id === currentPlayerId);
+  const isHost = currentPlayer?.isHost || false;
   const hasVoted = !!currentPlayer?.vote;
-
   const handleVote = async () => {
     if (!selectedId || hasVoted) return;
     
@@ -26,6 +27,19 @@ export default function Voting({ room, currentPlayerId }: Props) {
       console.error(err);
       alert("Lỗi khi gửi phiếu bầu");
       setIsSubmitting(false);
+    }
+  };
+
+  const handleKick = async (pid: string, name: string) => {
+    if (!confirm(`Bạn có chắc muốn đuổi ${name} khỏi phòng?`)) return;
+    setIsKicking(true);
+    try {
+      await kickPlayer(room.id, pid);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi đuổi người chơi");
+    } finally {
+      setIsKicking(false);
     }
   };
 
@@ -93,6 +107,19 @@ export default function Voting({ room, currentPlayerId }: Props) {
                   )}
                   {!hasVoted && isSelected && <Check className="w-5 h-5 text-danger" />}
                   {player.vote && <span className="w-2 h-2 rounded-full bg-success shadow-[0_0_5px_rgba(16,185,129,0.5)]" />}
+                  {isHost && !player.isHost && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleKick(player.id, player.name);
+                      }}
+                      disabled={isKicking}
+                      className="p-1 hover:bg-danger/20 text-slate-500 hover:text-danger rounded-lg transition-colors"
+                      title="Đuổi khỏi phòng"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             );

@@ -32,6 +32,25 @@ export default function RoomPage() {
     }
   }, [playerId, playerName, roomId, room?.status, router]);
 
+  // Handle being kicked
+  useEffect(() => {
+    if (room && !loading) {
+      const isPlayerInRoom = room.players.some(p => p.id === playerId);
+      // We check if the room document exists but the player is not in it.
+      if (!isPlayerInRoom) {
+        // Give a tiny delay to ensure joinRoom has had a chance to run initially
+        const timeout = setTimeout(() => {
+          const stillNotInRoom = room.players.every(p => p.id !== playerId);
+          if (stillNotInRoom) {
+            alert("Bạn đã bị chủ phòng mời ra khỏi phòng!");
+            router.push("/");
+          }
+        }, 2000);
+        return () => clearTimeout(timeout);
+      }
+    }
+  }, [room, loading, playerId, router]);
+
   if (!playerId || !playerName) return null;
 
   if (loading) {
