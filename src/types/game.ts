@@ -14,7 +14,18 @@ export type WerewolfPhase =
 
 export type WerewolfNightActionType = "WOLF_KILL" | "GUARD_PROTECT" | "SEER_CHECK" | "PASS";
 
+export interface WerewolfNightCall {
+  id: string;
+  title: string;
+  instruction: string;
+  actorIds: string[];
+  actionType: WerewolfNightActionType | null;
+  requiresAction: boolean;
+  allowSelfTarget: boolean;
+}
+
 export interface WerewolfNightAction {
+  callId: string;
   actorId: string;
   roleId: string | null;
   type: WerewolfNightActionType;
@@ -51,6 +62,7 @@ export interface Room {
   cardRevealDuration: number;
   config?: RoomConfig;
   werewolfPhase?: WerewolfPhase | null;
+  werewolfNightCallIndex?: number;
   werewolfNightActions?: Record<string, WerewolfNightAction>;
   werewolfSummary?: string[];
   werewolfWinner?: GameTeam | null;

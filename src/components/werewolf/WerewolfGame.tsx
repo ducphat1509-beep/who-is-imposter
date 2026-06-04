@@ -2,11 +2,11 @@ import { useState } from "react";
 import Image from "next/image";
 import { Check, Moon, Skull, Sun, Users, Vote } from "lucide-react";
 import clsx from "clsx";
-import { GameTeam, Player, Room, WerewolfNightActionType } from "@/types/game";
+import { GameTeam, Player, Room, WerewolfNightActionType, WerewolfNightCall } from "@/types/game";
 import {
+  advanceWerewolfNightCall,
   playAgain,
   revealCard,
-  resolveWerewolfNightPhase,
   startWerewolfNight,
   startWerewolfVoting,
   submitWerewolfNightAction,
@@ -14,8 +14,8 @@ import {
 } from "@/lib/roomActions";
 import {
   canVote,
-  getRequiredNightActors,
-  getWerewolfNightActionType,
+  getNightActionKey,
+  getWerewolfNightCalls,
   isAlive,
 } from "@/lib/games/werewolf/logic";
 import { getWerewolfRole } from "@/lib/games/werewolf/roles";
@@ -42,8 +42,19 @@ function getWinnerLabel(winner: GameTeam | null | undefined): string {
   return "Ván đấu kết thúc";
 }
 
+function getCallProgress(call: WerewolfNightCall | undefined, room: Room): string {
+  if (!call) return "0/0";
+  if (!call.requiresAction) return "Ghi chú";
+
+  const done = call.actorIds.filter((actorId) => {
+    return !!room.werewolfNightActions?.[getNightActionKey(call.id, actorId)];
+  }).length;
+
+  return `${done}/${call.actorIds.length}`;
+}
+
 export default function WerewolfGame({ room, currentPlayer, isHost, currentPlayerId }: Props) {
-  const [showRole, setShowRole] = useState(false);
+  const [revealedRoleKeys, setRevealedRoleKeys] = useState<Record<string, boolean>>({});
   const [selectedVoteId, setSelectedVoteId] = useState<string | null>(null);
 
   if (room.status === "WAITING") {
@@ -54,17 +65,23 @@ export default function WerewolfGame({ room, currentPlayer, isHost, currentPlaye
 
   const phase = room.werewolfPhase ?? "ROLE_REVEAL";
   const role = getWerewolfRole(currentPlayer.roleId);
+  const revealKey = `${room.id}:${room.round ?? 0}:${currentPlayer.roleId ?? "none"}`;
+  const showRole = revealedRoleKeys[revealKey] ?? false;
   const allRevealed = room.players.every((player) => player.hasRevealed);
   const alivePlayers = room.players.filter(isAlive);
-  const requiredActors = getRequiredNightActors(room.players);
-  const completedNightActions = requiredActors.filter((player) => room.werewolfNightActions?.[player.id]);
-  const currentNightActionType = getWerewolfNightActionType(currentPlayer);
-  const currentNightAction = room.werewolfNightActions?.[currentPlayer.id];
+  const nightCalls = getWerewolfNightCalls(room.players, room.round ?? 1);
+  const currentCallIndex = room.werewolfNightCallIndex ?? 0;
+  const currentNightCall = nightCalls[currentCallIndex];
+  const isCurrentNightActor = !!currentNightCall?.actorIds.includes(currentPlayerId);
+  const currentNightActionType = isCurrentNightActor ? currentNightCall.actionType : null;
+  const currentNightAction = currentNightCall
+    ? room.werewolfNightActions?.[getNightActionKey(currentNightCall.id, currentPlayer.id)]
+    : undefined;
   const currentPlayerCanVote = canVote(currentPlayer);
   const currentPlayerVoted = !!currentPlayer.vote;
 
   const handleReveal = async () => {
-    setShowRole(true);
+    setRevealedRoleKeys((current) => ({ ...current, [revealKey]: true }));
     if (!currentPlayer.hasRevealed) {
       await revealCard(room.id, currentPlayer.id);
     }
@@ -97,7 +114,7 @@ export default function WerewolfGame({ room, currentPlayer, isHost, currentPlaye
           </div>
         </div>
 
-        <PlayerStateList players={room.players} />
+        <PlayerStateList players={room.players} revealRoles />
 
         {isHost && (
           <button onClick={() => playAgain(room.id)} className="btn-primary w-full py-4">
@@ -166,23 +183,36 @@ export default function WerewolfGame({ room, currentPlayer, isHost, currentPlaye
   }
 
   if (phase === "NIGHT_ACTION") {
+    const aliveWolfNames = room.players
+      .filter((player) => isAlive(player) && player.team === "WEREWOLF")
+      .map((player) => player.name)
+      .join(", ");
+
     return (
       <div className="flex flex-col gap-6 w-full h-full pb-8">
         <Header
           icon={<Moon className="w-8 h-8" />}
           title={`Đêm ${room.round ?? 1}`}
-          subtitle="Quản trò gọi các vai có chức năng. Người không có lượt thì ngủ ngoan."
+          subtitle={currentNightCall ? `Quản trò gọi: ${currentNightCall.title}` : "Không còn vai cần gọi."}
         />
 
         <SummaryPanel lines={room.werewolfSummary ?? []} />
 
         <div className="glass-card space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Lượt hành động</h3>
+            <h3 className="font-semibold">{currentNightCall?.title ?? "Hết lượt gọi"}</h3>
             <span className="text-xs rounded-full bg-primary/20 text-primary px-3 py-1 font-bold">
-              {completedNightActions.length}/{requiredActors.length}
+              {currentCallIndex + 1}/{Math.max(nightCalls.length, 1)} · {getCallProgress(currentNightCall, room)}
             </span>
           </div>
+
+          <p className="text-sm text-slate-300">{currentNightCall?.instruction ?? "Host có thể công bố trời sáng."}</p>
+
+          {currentNightCall?.id === "wolf-pack" && currentPlayer.team === "WEREWOLF" && (
+            <div className="rounded-xl border border-danger/30 bg-danger/10 p-3 text-sm text-slate-200">
+              Đồng bọn còn sống: <b>{aliveWolfNames}</b>
+            </div>
+          )}
 
           {currentNightActionType && isAlive(currentPlayer) ? (
             <div className="space-y-3">
@@ -201,19 +231,23 @@ export default function WerewolfGame({ room, currentPlayer, isHost, currentPlaye
                 <TargetPicker
                   players={alivePlayers}
                   currentPlayerId={currentPlayerId}
-                  allowSelf={currentNightActionType === "GUARD_PROTECT"}
+                  allowSelf={currentNightCall?.allowSelfTarget ?? false}
                   onPick={handleNightAction}
                 />
               )}
             </div>
+          ) : currentNightCall?.actorIds.includes(currentPlayerId) ? (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-300">
+              Vai này đang được gọi, nhưng chức năng hiện để quản trò ghi chú thủ công.
+            </div>
           ) : (
-            <p className="text-sm text-slate-400">Bạn không có hành động trong đêm này.</p>
+            <p className="text-sm text-slate-400">Bạn đang ngủ. Đợi quản trò gọi đúng vai.</p>
           )}
         </div>
 
         {isHost && (
-          <button onClick={() => resolveWerewolfNightPhase(room.id)} className="btn-primary w-full py-4">
-            Công bố trời sáng
+          <button onClick={() => advanceWerewolfNightCall(room.id)} className="btn-primary w-full py-4">
+            {currentCallIndex < nightCalls.length - 1 ? "Gọi vai tiếp theo" : "Công bố trời sáng"}
           </button>
         )}
       </div>
@@ -374,7 +408,7 @@ function PlayerRevealList({ players }: { players: Player[] }) {
   );
 }
 
-function PlayerStateList({ players }: { players: Player[] }) {
+function PlayerStateList({ players, revealRoles = false }: { players: Player[]; revealRoles?: boolean }) {
   return (
     <div className="glass-card space-y-2">
       {players.map((player) => {
@@ -383,7 +417,7 @@ function PlayerStateList({ players }: { players: Player[] }) {
           <div key={player.id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2">
             <div>
               <p className="text-sm font-medium">{player.name}</p>
-              <p className="text-xs text-slate-500">{role.name}</p>
+              {revealRoles && <p className="text-xs text-slate-500">{role.name}</p>}
             </div>
             <span
               className={clsx(
