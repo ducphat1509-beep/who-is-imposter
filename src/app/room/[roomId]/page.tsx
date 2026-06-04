@@ -4,10 +4,7 @@ import { useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useRoom } from "@/hooks/useRoom";
 import { useGameStore } from "@/store/useGameStore";
-import Lobby from "@/components/Lobby";
-import GameBoard from "@/components/GameBoard";
-import Voting from "@/components/Voting";
-import Result from "@/components/Result";
+import GameRouter from "@/components/GameRouter";
 import { joinRoom } from "@/lib/roomActions";
 import { Ghost } from "lucide-react";
 
@@ -27,7 +24,7 @@ export default function RoomPage() {
     }
 
     // Attempt to join the room if not already in it
-    if (room && room.status === "WAITING") {
+    if (room?.status === "WAITING") {
       joinRoom(roomId, playerName, playerId).catch(console.error);
     }
   }, [playerId, playerName, roomId, room?.status, router]);
@@ -85,10 +82,12 @@ export default function RoomPage() {
 
   return (
     <div className="flex-1 flex flex-col p-4 relative max-w-lg mx-auto w-full">
-      {room.status === "WAITING" && <Lobby room={room} isHost={isHost} currentPlayerId={playerId} />}
-      {room.status === "SHOW_CARD" && <GameBoard room={room} currentPlayer={currentPlayer!} />}
-      {room.status === "VOTING" && <Voting room={room} currentPlayerId={playerId} />}
-      {room.status === "RESULT" && <Result room={room} isHost={isHost} currentPlayerId={playerId} />}
+      <GameRouter
+        room={room}
+        currentPlayer={currentPlayer}
+        isHost={isHost}
+        currentPlayerId={playerId}
+      />
     </div>
   );
 }

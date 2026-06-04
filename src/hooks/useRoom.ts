@@ -5,40 +5,40 @@ import { Room } from "@/types/game";
 
 export function useRoom(roomId: string | null) {
   const [roomState, setRoomState] = useState<Room | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [observedRoomId, setObservedRoomId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!roomId) {
-      setRoomState(null);
-      setLoading(false);
-      return;
-    }
+    if (!roomId) return;
 
-    setLoading(true);
     const roomRef = doc(db, "rooms", roomId);
 
     const unsubscribe = onSnapshot(
       roomRef,
-      (doc) => {
-        if (doc.exists()) {
-          setRoomState(doc.data() as Room);
+      (snapshot) => {
+        setObservedRoomId(roomId);
+
+        if (snapshot.exists()) {
+          setRoomState(snapshot.data() as Room);
           setError(null);
         } else {
           setRoomState(null);
           setError("Phòng không tồn tại!");
         }
-        setLoading(false);
       },
       (err) => {
         console.error("Lỗi khi lắng nghe dữ liệu phòng:", err);
+        setObservedRoomId(roomId);
         setError("Lỗi kết nối. Vui lòng thử lại!");
-        setLoading(false);
       }
     );
 
     return () => unsubscribe();
   }, [roomId]);
 
-  return { room: roomState, loading, error };
+  return {
+    room: roomId ? roomState : null,
+    loading: roomId ? observedRoomId !== roomId : false,
+    error,
+  };
 }

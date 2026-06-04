@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Room, Player } from "@/types/game";
 import { revealCard, startVotingPhase, kickPlayer } from "@/lib/roomActions";
 import Timer from "./Timer";
@@ -156,5 +156,4 @@ export default function GameBoard({ room, currentPlayer }: Props) {
     </div>
   );
 }
-
 

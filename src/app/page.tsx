@@ -4,12 +4,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createRoom } from "@/lib/roomActions";
 import { useGameStore } from "@/store/useGameStore";
+import { GameType } from "@/types/game";
 import { Ghost, Users, ArrowRight, Play } from "lucide-react";
 
 export default function Home() {
   const router = useRouter();
   const [playerName, setPlayerName] = useState("");
   const [roomIdInput, setRoomIdInput] = useState("");
+  const [gameType, setGameType] = useState<GameType>("IMPOSTER");
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const setPlayerInfo = useGameStore((state) => state.setPlayerInfo);
@@ -19,7 +21,7 @@ export default function Home() {
     setIsCreating(true);
     try {
       const playerId = crypto.randomUUID();
-      const roomId = await createRoom(playerName.trim(), playerId);
+      const roomId = await createRoom(playerName.trim(), playerId, gameType);
       setPlayerInfo(playerId, playerName.trim());
       router.push(`/room/${roomId}`);
     } catch (error) {
@@ -76,6 +78,36 @@ export default function Home() {
               onChange={(e) => setPlayerName(e.target.value)}
               maxLength={20}
             />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300 font-medium pl-1">Chọn trò chơi</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setGameType("IMPOSTER")}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-all ${
+                  gameType === "IMPOSTER"
+                    ? "border-primary bg-primary/20 text-white"
+                    : "border-white/10 bg-surface/50 text-slate-300 hover:bg-surface"
+                }`}
+              >
+                <Ghost className="w-4 h-4" />
+                Gián Điệp
+              </button>
+              <button
+                type="button"
+                onClick={() => setGameType("WEREWOLF")}
+                className={`flex items-center justify-center gap-2 rounded-xl border px-3 py-3 text-sm font-bold transition-all ${
+                  gameType === "WEREWOLF"
+                    ? "border-danger bg-danger/20 text-white"
+                    : "border-white/10 bg-surface/50 text-slate-300 hover:bg-surface"
+                }`}
+              >
+                <Users className="w-4 h-4" />
+                Ma Sói
+              </button>
+            </div>
           </div>
 
           <button

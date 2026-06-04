@@ -9,13 +9,16 @@ export function useTimer(initialSeconds: number, onComplete?: () => void) {
 
     if (isRunning && timeLeft > 0) {
       interval = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            setIsRunning(false);
+            onComplete?.();
+            return 0;
+          }
+
+          return prev - 1;
+        });
       }, 1000);
-    } else if (timeLeft === 0) {
-      setIsRunning(false);
-      if (onComplete) {
-        onComplete();
-      }
     }
 
     return () => clearInterval(interval);
