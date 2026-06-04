@@ -1,8 +1,14 @@
 import { db } from "./firebase";
 import { doc, setDoc, runTransaction } from "firebase/firestore";
-import { GameType, Player, Room } from "@/types/game";
+import { GameType, Player, Room, WerewolfNightAction } from "@/types/game";
 import { assignRolesAndWords } from "./gameLogic";
-import { assignWerewolfRoles } from "./games/werewolf/logic";
+import {
+  assignWerewolfRoles,
+  canVote,
+  getWerewolfNightActionType,
+  resolveWerewolfNight,
+  resolveWerewolfVote,
+} from "./games/werewolf/logic";
 
 // Helper to generate a random 6-character room code
 function generateRoomCode() {
@@ -100,6 +106,9 @@ export async function startGame(roomId: string): Promise<void> {
         status: "SHOW_CARD",
         players: updatedPlayers,
         werewolfPhase: "ROLE_REVEAL",
+        werewolfNightActions: {},
+        werewolfSummary: ["Mọi người xem vai. Quản trò chuẩn bị gọi đêm đầu tiên."],
+        werewolfWinner: null,
         round: 1
       });
       return;
@@ -191,7 +200,151 @@ export async function playAgain(roomId: string): Promise<void> {
       spyWord: "",
       civilianWord: "",
       werewolfPhase: null,
+      werewolfNightActions: {},
+      werewolfSummary: [],
+      werewolfWinner: null,
       round: 0
+    });
+  });
+}
+
+export async function startWerewolfNight(roomId: string): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    const nextRound = roomData.werewolfPhase === "EXECUTION"
+      ? (roomData.round ?? 1) + 1
+      : (roomData.round ?? 1);
+    const resetPlayers = roomData.players.map((player) => ({ ...player, vote: null }));
+
+    transaction.update(roomRef, {
+      status: "SHOW_CARD",
+      players: resetPlayers,
+      werewolfPhase: "NIGHT_ACTION",
+      werewolfNightActions: {},
+      werewolfSummary: [`Đêm ${nextRound}: tất cả nhắm mắt, quản trò bắt đầu gọi vai.`],
+      round: nextRound
+    });
+  });
+}
+
+export async function submitWerewolfNightAction(
+  roomId: string,
+  actorId: string,
+  targetId: string | null
+): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "NIGHT_ACTION") return;
+
+    const actor = roomData.players.find((player) => player.id === actorId);
+    if (!actor) return;
+
+    const actionType = getWerewolfNightActionType(actor);
+    if (!actionType) return;
+
+    const nextAction: WerewolfNightAction = {
+      actorId,
+      roleId: actor.roleId ?? null,
+      type: actionType,
+      targetId,
+      createdAt: Date.now(),
+    };
+
+    transaction.update(roomRef, {
+      werewolfNightActions: {
+        ...(roomData.werewolfNightActions ?? {}),
+        [actorId]: nextAction,
+      },
+    });
+  });
+}
+
+export async function resolveWerewolfNightPhase(roomId: string): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "NIGHT_ACTION") return;
+
+    const result = resolveWerewolfNight(roomData.players, roomData.werewolfNightActions ?? {});
+
+    transaction.update(roomRef, {
+      players: result.players,
+      status: result.winner ? "RESULT" : "SHOW_CARD",
+      werewolfPhase: result.winner ? null : "DAY_ANNOUNCEMENT",
+      werewolfSummary: result.summary,
+      werewolfWinner: result.winner,
+    });
+  });
+}
+
+export async function startWerewolfVoting(roomId: string): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    const resetPlayers = roomData.players.map((player) => ({ ...player, vote: null }));
+
+    transaction.update(roomRef, {
+      players: resetPlayers,
+      werewolfPhase: "TRIAL_VOTING",
+      werewolfSummary: ["Ban ngày: mọi người tranh luận và bỏ phiếu treo cổ."],
+    });
+  });
+}
+
+export async function submitWerewolfVote(
+  roomId: string,
+  voterId: string,
+  targetId: string
+): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "TRIAL_VOTING") return;
+
+    const voter = roomData.players.find((player) => player.id === voterId);
+    if (!voter || !canVote(voter)) return;
+
+    const updatedPlayers = roomData.players.map((player) =>
+      player.id === voterId ? { ...player, vote: targetId } : player
+    );
+    const eligibleVoters = updatedPlayers.filter(canVote);
+    const allVoted = eligibleVoters.every((player) => player.vote !== null);
+
+    if (!allVoted) {
+      transaction.update(roomRef, { players: updatedPlayers });
+      return;
+    }
+
+    const result = resolveWerewolfVote(updatedPlayers);
+
+    transaction.update(roomRef, {
+      players: result.players,
+      status: result.winner ? "RESULT" : "SHOW_CARD",
+      werewolfPhase: result.winner ? null : "EXECUTION",
+      werewolfSummary: result.summary,
+      werewolfWinner: result.winner,
     });
   });
 }

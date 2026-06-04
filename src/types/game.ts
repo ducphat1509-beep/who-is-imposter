@@ -6,15 +6,21 @@ export type RoomStatus = "WAITING" | "SHOW_CARD" | "VOTING" | "RESULT";
 
 export type WerewolfPhase =
   | "ROLE_REVEAL"
-  | "NIGHT_INTRO"
   | "NIGHT_ACTION"
-  | "NIGHT_RESOLVE"
   | "DAY_ANNOUNCEMENT"
   | "DISCUSSION"
   | "TRIAL_VOTING"
-  | "DEFENSE"
-  | "EXECUTION"
-  | "CHECK_WIN";
+  | "EXECUTION";
+
+export type WerewolfNightActionType = "WOLF_KILL" | "GUARD_PROTECT" | "SEER_CHECK" | "PASS";
+
+export interface WerewolfNightAction {
+  actorId: string;
+  roleId: string | null;
+  type: WerewolfNightActionType;
+  targetId: string | null;
+  createdAt: number;
+}
 
 export interface RoomConfig {
   gameType: GameType;
@@ -45,5 +51,8 @@ export interface Room {
   cardRevealDuration: number;
   config?: RoomConfig;
   werewolfPhase?: WerewolfPhase | null;
+  werewolfNightActions?: Record<string, WerewolfNightAction>;
+  werewolfSummary?: string[];
+  werewolfWinner?: GameTeam | null;
   round?: number;
 }
