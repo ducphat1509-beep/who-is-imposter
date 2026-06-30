@@ -1,15 +1,17 @@
 import { db } from "./firebase";
 import { doc, setDoc, runTransaction } from "firebase/firestore";
-import { GameType, Player, Room, WerewolfNightAction } from "@/types/game";
+import { GameType, Player, Room, WerewolfNightAction, WerewolfNightActionType } from "@/types/game";
 import { assignRolesAndWords } from "./gameLogic";
 import {
   assignWerewolfRoles,
   canVote,
   getNightActionKey,
   getWerewolfNightCalls,
+  prepareWerewolfPlayersForNight,
   resolveWerewolfNight,
   resolveWerewolfVote,
 } from "./games/werewolf/logic";
+import { createWerewolfEventDeck, drawWerewolfEvent } from "./games/werewolf/events";
 
 // Helper to generate a random 6-character room code
 function generateRoomCode() {
@@ -35,7 +37,8 @@ export async function createRoom(
     roleId: null,
     team: null,
     isAlive: true,
-    statusEffects: []
+    statusEffects: [],
+    guardLastTargetId: null
   };
 
   const newRoom: Room = {
@@ -81,7 +84,8 @@ export async function joinRoom(roomId: string, playerName: string, playerId: str
       roleId: null,
       team: null,
       isAlive: true,
-      statusEffects: []
+      statusEffects: [],
+      guardLastTargetId: null
     };
 
     transaction.update(roomRef, {
@@ -111,6 +115,9 @@ export async function startGame(roomId: string): Promise<void> {
         werewolfNightActions: {},
         werewolfSummary: ["Mọi người xem vai. Quản trò chuẩn bị gọi đêm đầu tiên."],
         werewolfWinner: null,
+        werewolfEventDeck: createWerewolfEventDeck(),
+        werewolfDiscardedEvents: [],
+        werewolfActiveEvent: null,
         round: 1
       });
       return;
@@ -193,7 +200,8 @@ export async function playAgain(roomId: string): Promise<void> {
       roleId: null,
       team: null,
       isAlive: true,
-      statusEffects: []
+      statusEffects: [],
+      guardLastTargetId: null
     }));
 
     transaction.update(roomRef, {
@@ -206,6 +214,9 @@ export async function playAgain(roomId: string): Promise<void> {
       werewolfNightActions: {},
       werewolfSummary: [],
       werewolfWinner: null,
+      werewolfEventDeck: [],
+      werewolfDiscardedEvents: [],
+      werewolfActiveEvent: null,
       round: 0
     });
   });
@@ -219,10 +230,12 @@ export async function startWerewolfNight(roomId: string): Promise<void> {
     if (!roomSnap.exists()) return;
 
     const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "ROLE_REVEAL" && roomData.werewolfPhase !== "EXECUTION") return;
+
     const nextRound = roomData.werewolfPhase === "EXECUTION"
       ? (roomData.round ?? 1) + 1
       : (roomData.round ?? 1);
-    const resetPlayers = roomData.players.map((player) => ({ ...player, vote: null }));
+    const resetPlayers = prepareWerewolfPlayersForNight(roomData.players);
 
     transaction.update(roomRef, {
       status: "SHOW_CARD",
@@ -239,7 +252,8 @@ export async function startWerewolfNight(roomId: string): Promise<void> {
 export async function submitWerewolfNightAction(
   roomId: string,
   actorId: string,
-  targetId: string | null
+  targetId: string | null,
+  selectedActionType?: WerewolfNightActionType
 ): Promise<void> {
   const roomRef = doc(db, "rooms", roomId);
 
@@ -256,12 +270,27 @@ export async function submitWerewolfNightAction(
     const calls = getWerewolfNightCalls(roomData.players, roomData.round ?? 1);
     const currentCall = calls[roomData.werewolfNightCallIndex ?? 0];
     if (!currentCall?.actionType || !currentCall.actorIds.includes(actorId)) return;
+    const target = targetId ? roomData.players.find((player) => player.id === targetId) : null;
+    if (targetId && !target) return;
+    if (targetId && !currentCall.allowSelfTarget && targetId === actorId) return;
+    if (currentCall.id === "guard" && targetId && targetId === actor.guardLastTargetId) return;
+    const actionType = selectedActionType ?? currentCall.actionType;
+    if (currentCall.id !== "witch" && actionType !== currentCall.actionType && actionType !== "PASS") return;
+    if (currentCall.id === "witch") {
+      if (actionType === "WITCH_SAVE" && actor.statusEffects?.includes("witch_save_used")) return;
+      if (actionType === "WITCH_POISON" && actor.statusEffects?.includes("witch_poison_used")) return;
+      if (actionType === "WITCH_POISON" && !targetId) return;
+    }
+    if (actionType === "WHITE_WOLF_KILL" && target?.team !== "WEREWOLF") return;
+    if (actionType === "CONVERTER_WOLF_CONVERT" && target?.team === "WEREWOLF") return;
+    if (actionType === "CAPTAIN_GUARD_SHOOT" && actor.statusEffects?.includes("captain_guard_used")) return;
+    if (actionType === "CONVERTER_WOLF_CONVERT" && actor.statusEffects?.includes("converter_wolf_used")) return;
 
     const nextAction: WerewolfNightAction = {
       callId: currentCall.id,
       actorId,
       roleId: actor.roleId ?? null,
-      type: currentCall.actionType,
+      type: targetId ? actionType : "PASS",
       targetId,
       createdAt: Date.now(),
     };
@@ -298,14 +327,88 @@ export async function advanceWerewolfNightCall(roomId: string): Promise<void> {
     }
 
     const result = resolveWerewolfNight(roomData.players, roomData.werewolfNightActions ?? {});
+    const eventResult = result.winner
+      ? null
+      : drawWerewolfEvent(
+          result.players,
+          roomData.werewolfEventDeck,
+          roomData.werewolfDiscardedEvents,
+          roomData.round ?? 1
+        );
 
     transaction.update(roomRef, {
-      players: result.players,
+      players: eventResult?.players ?? result.players,
       status: result.winner ? "RESULT" : "SHOW_CARD",
       werewolfPhase: result.winner ? null : "DAY_ANNOUNCEMENT",
       werewolfNightCallIndex: 0,
-      werewolfSummary: result.summary,
+      werewolfSummary: eventResult ? [...result.summary, ...eventResult.summary] : result.summary,
       werewolfWinner: result.winner,
+      ...(eventResult
+        ? {
+            werewolfEventDeck: eventResult.deck,
+            werewolfDiscardedEvents: eventResult.discarded,
+            werewolfActiveEvent: eventResult.activeEvent,
+          }
+        : {}),
+    });
+  });
+}
+
+export async function advanceWerewolfNightCallIfReady(roomId: string): Promise<void> {
+  const roomRef = doc(db, "rooms", roomId);
+
+  await runTransaction(db, async (transaction) => {
+    const roomSnap = await transaction.get(roomRef);
+    if (!roomSnap.exists()) return;
+
+    const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "NIGHT_ACTION") return;
+
+    const calls = getWerewolfNightCalls(roomData.players, roomData.round ?? 1);
+    const currentIndex = roomData.werewolfNightCallIndex ?? 0;
+    const currentCall = calls[currentIndex];
+    if (!currentCall) return;
+
+    const actionMap = roomData.werewolfNightActions ?? {};
+    const allRequiredActionsDone = currentCall.actorIds.every((actorId) => {
+      return !!actionMap[getNightActionKey(currentCall.id, actorId)];
+    });
+    const isReady = !currentCall.requiresAction || allRequiredActionsDone;
+    if (!isReady) return;
+
+    if (currentIndex < calls.length - 1) {
+      const nextCall = calls[currentIndex + 1];
+      transaction.update(roomRef, {
+        werewolfNightCallIndex: currentIndex + 1,
+        werewolfSummary: [`Quản trò gọi: ${nextCall.title}. ${nextCall.instruction}`],
+      });
+      return;
+    }
+
+    const result = resolveWerewolfNight(roomData.players, actionMap);
+    const eventResult = result.winner
+      ? null
+      : drawWerewolfEvent(
+          result.players,
+          roomData.werewolfEventDeck,
+          roomData.werewolfDiscardedEvents,
+          roomData.round ?? 1
+        );
+
+    transaction.update(roomRef, {
+      players: eventResult?.players ?? result.players,
+      status: result.winner ? "RESULT" : "SHOW_CARD",
+      werewolfPhase: result.winner ? null : "DAY_ANNOUNCEMENT",
+      werewolfNightCallIndex: 0,
+      werewolfSummary: eventResult ? [...result.summary, ...eventResult.summary] : result.summary,
+      werewolfWinner: result.winner,
+      ...(eventResult
+        ? {
+            werewolfEventDeck: eventResult.deck,
+            werewolfDiscardedEvents: eventResult.discarded,
+            werewolfActiveEvent: eventResult.activeEvent,
+          }
+        : {}),
     });
   });
 }
@@ -321,14 +424,29 @@ export async function resolveWerewolfNightPhase(roomId: string): Promise<void> {
     if (roomData.werewolfPhase !== "NIGHT_ACTION") return;
 
     const result = resolveWerewolfNight(roomData.players, roomData.werewolfNightActions ?? {});
+    const eventResult = result.winner
+      ? null
+      : drawWerewolfEvent(
+          result.players,
+          roomData.werewolfEventDeck,
+          roomData.werewolfDiscardedEvents,
+          roomData.round ?? 1
+        );
 
     transaction.update(roomRef, {
-      players: result.players,
+      players: eventResult?.players ?? result.players,
       status: result.winner ? "RESULT" : "SHOW_CARD",
       werewolfPhase: result.winner ? null : "DAY_ANNOUNCEMENT",
       werewolfNightCallIndex: 0,
-      werewolfSummary: result.summary,
+      werewolfSummary: eventResult ? [...result.summary, ...eventResult.summary] : result.summary,
       werewolfWinner: result.winner,
+      ...(eventResult
+        ? {
+            werewolfEventDeck: eventResult.deck,
+            werewolfDiscardedEvents: eventResult.discarded,
+            werewolfActiveEvent: eventResult.activeEvent,
+          }
+        : {}),
     });
   });
 }
@@ -341,6 +459,8 @@ export async function startWerewolfVoting(roomId: string): Promise<void> {
     if (!roomSnap.exists()) return;
 
     const roomData = roomSnap.data() as Room;
+    if (roomData.werewolfPhase !== "DAY_ANNOUNCEMENT") return;
+
     const resetPlayers = roomData.players.map((player) => ({ ...player, vote: null }));
 
     transaction.update(roomRef, {

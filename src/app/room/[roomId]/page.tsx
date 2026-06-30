@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useRoom } from "@/hooks/useRoom";
 import { useGameStore } from "@/store/useGameStore";
 import GameRouter from "@/components/GameRouter";
+import RoomComms from "@/components/RoomComms";
 import { joinRoom } from "@/lib/roomActions";
 import { Ghost } from "lucide-react";
 
@@ -88,6 +89,7 @@ export default function RoomPage() {
         isHost={isHost}
         currentPlayerId={playerId}
       />
+      <RoomComms room={room} currentPlayer={currentPlayer} />
     </div>
   );
 }

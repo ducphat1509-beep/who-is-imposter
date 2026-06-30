@@ -12,7 +12,18 @@ export type WerewolfPhase =
   | "TRIAL_VOTING"
   | "EXECUTION";
 
-export type WerewolfNightActionType = "WOLF_KILL" | "GUARD_PROTECT" | "SEER_CHECK" | "PASS";
+export type WerewolfNightActionType =
+  | "WOLF_KILL"
+  | "GUARD_PROTECT"
+  | "SEER_CHECK"
+  | "WITCH_SAVE"
+  | "WITCH_POISON"
+  | "ICE_WOLF_FREEZE"
+  | "FIRE_WOLF_CURSE"
+  | "CONVERTER_WOLF_CONVERT"
+  | "CAPTAIN_GUARD_SHOOT"
+  | "WHITE_WOLF_KILL"
+  | "PASS";
 
 export interface WerewolfNightCall {
   id: string;
@@ -37,6 +48,39 @@ export interface RoomConfig {
   gameType: GameType;
 }
 
+export type WerewolfEventEffect =
+  | "NONE"
+  | "RANDOM_NO_VOTE"
+  | "RANDOM_SILENCE_NEXT_NIGHT"
+  | "CLEAR_NO_VOTE"
+  | "EXTRA_DISCUSSION";
+
+export interface WerewolfEventCard {
+  id: string;
+  title: string;
+  flavor: string;
+  effect: WerewolfEventEffect;
+  summary: string;
+}
+
+export interface WerewolfEventState {
+  card: WerewolfEventCard;
+  round: number;
+  resolvedAt: number;
+}
+
+export type ChatChannel = "room" | "werewolf" | "system";
+
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  playerId: string;
+  playerName: string;
+  channel: ChatChannel;
+  text: string;
+  createdAt: number;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -49,6 +93,7 @@ export interface Player {
   team?: GameTeam | null;
   isAlive?: boolean;
   statusEffects?: string[];
+  guardLastTargetId?: string | null;
 }
 
 export interface Room {
@@ -66,5 +111,8 @@ export interface Room {
   werewolfNightActions?: Record<string, WerewolfNightAction>;
   werewolfSummary?: string[];
   werewolfWinner?: GameTeam | null;
+  werewolfEventDeck?: string[];
+  werewolfDiscardedEvents?: string[];
+  werewolfActiveEvent?: WerewolfEventState | null;
   round?: number;
 }

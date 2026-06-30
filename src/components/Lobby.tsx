@@ -3,6 +3,8 @@ import { startGame, kickPlayer } from "@/lib/roomActions";
 import { Users, Crown, Copy, Check, X } from "lucide-react";
 import { useState } from "react";
 import clsx from "clsx";
+import { getWerewolfRolePreset } from "@/lib/games/werewolf/logic";
+import { getWerewolfRole } from "@/lib/games/werewolf/roles";
 
 interface Props {
   room: Room;
@@ -12,6 +14,13 @@ interface Props {
 
 export default function Lobby({ room, isHost, currentPlayerId }: Props) {
   const [copied, setCopied] = useState(false);
+  const isWerewolfRoom = room.gameType === "WEREWOLF";
+  const werewolfRoles = isWerewolfRoom
+    ? getWerewolfRolePreset(room.players.length).map((roleId) => getWerewolfRole(roleId))
+    : [];
+  const werewolfCount = werewolfRoles.filter((role) => role.team === "WEREWOLF").length;
+  const villageCount = werewolfRoles.filter((role) => role.team === "VILLAGE").length;
+  const soloCount = werewolfRoles.filter((role) => role.team === "SOLO").length;
 
   const copyRoomId = () => {
     navigator.clipboard.writeText(room.id);
@@ -52,6 +61,37 @@ export default function Lobby({ room, isHost, currentPlayerId }: Props) {
         </div>
         <p className="text-xs text-slate-500">Chạm để copy</p>
       </div>
+
+      {isWerewolfRoom && (
+        <div className="glass-card space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-lg text-white">Gói vai Ma Sói</h3>
+              <p className="text-sm text-slate-400">Tự cân theo {room.players.length} người chơi</p>
+            </div>
+            <div className="flex gap-2 text-xs font-bold">
+              <span className="rounded-full bg-danger/20 px-2 py-1 text-danger">Sói {werewolfCount}</span>
+              <span className="rounded-full bg-success/20 px-2 py-1 text-success">Dân {villageCount}</span>
+              {soloCount > 0 && <span className="rounded-full bg-primary/20 px-2 py-1 text-primary">Solo {soloCount}</span>}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {werewolfRoles.map((role, index) => (
+              <span
+                key={`${role.id}-${index}`}
+                className={clsx(
+                  "rounded-full border px-3 py-1 text-xs font-semibold",
+                  role.team === "WEREWOLF" && "border-danger/30 bg-danger/10 text-red-200",
+                  role.team === "VILLAGE" && "border-success/30 bg-success/10 text-emerald-200",
+                  role.team === "SOLO" && "border-primary/30 bg-primary/10 text-violet-200"
+                )}
+              >
+                {role.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 glass-card flex flex-col gap-4 overflow-hidden">
         <div className="flex justify-between items-center px-1">
